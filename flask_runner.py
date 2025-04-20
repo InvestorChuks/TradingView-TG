@@ -10,31 +10,41 @@ TOKEN = os.getenv('TELEGRAM_BOT_TOKEN')
 CHAT_ID = os.getenv('TELEGRAM_CHAT_ID')
 bot = telebot.TeleBot(TOKEN, parse_mode=None)
 
+# Enable logging
+logging.basicConfig(level=logging.INFO)
 
 @app.route('/trading-view-alert', methods=['POST'])
 def trading_view_alert():
     try:
+        # Get JSON data from the request
         data = request.get_json(silent=True)
-        if data is None:
-            data = request.data.decode('utf-8')
-            message_text = data
-        else:
-            message_text = json.dumps(data, indent=2)
 
-        logging.info("Received alert data: %s", message_text)
-        bot.send_message(chat_id=CHAT_ID, text=message_text)
-        logging.info("Message sent to Telegram successfully")
+        # If no JSON data or invalid structure, return error
+        if not data or "coins" not in data:
+            return jsonify({"status": "error", "message": "Invalid data format or missing 'coins' list"}), 400
 
-        return jsonify({"status": "success", "message": "Alert received"}), 200
+        # Loop through each coin in the 'coins' list and send Telegram message for each
+        for coin in data["coins"]:
+            ticker = coin.get("ticker")
+            timeframe = coin.get("timeframe")
+            signal = coin.get("signal")
+
+            # Create a message for Telegram
+            message_text = f"Signal: {signal}\nCoin: {ticker}\nTimeframe: {timeframe}"
+
+            # Send message to Telegram
+            bot.send_message(chat_id=CHAT_ID, text=message_text)
+            logging.info(f"Message sent to Telegram for {ticker}: {message_text}")
+
+        return jsonify({"status": "success", "message": "Alert received and processed"}), 200
 
     except json.JSONDecodeError as e:
-        logging.error("Failed to decode JSON data: %s", e)
+        logging.error(f"Failed to decode JSON: {e}")
         return jsonify({"status": "error", "message": "Invalid JSON data"}), 400
 
     except Exception as e:
-        logging.error("An error occurred: %s", e)
+        logging.error(f"Error processing the request: {e}")
         return jsonify({"status": "error", "message": "An error occurred while processing the request"}), 500
 
-
 if __name__ == '__main__':
-    app.run(debug=True, port=5000)
+    app.run(debug=True, port=5000)  # Running on port 5000 for local testing
